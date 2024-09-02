@@ -6,8 +6,8 @@ roiPts = []
 inputMode = False
 roiBox = None
 pause = False
-zoom_factor = 2
-frame_count = 100
+zoom_factor = 1.2
+frame_count = 1000
 current_frame = 0
 
 # Mouse callback function
@@ -19,15 +19,15 @@ def select_roi(event, x, y, flags, param):
         cv2.circle(param, (x, y), 4, (0, 255, 0), 2)
         cv2.imshow("Frame", param)
 
-def zoom_generator(zoom_in_ratio, zoom_out_ratio, total_frames):
+def zoom_generator(zoom_in_ratio, zoom_out_ratio, total_frames, zoom_speed):
     frame = 0
     while True:
         if frame < total_frames * zoom_in_ratio:
             # Zoom in phase
-            zoom_level = 1 + (frame / (total_frames * zoom_in_ratio))
+            zoom_level = 1 + 2 * (frame / (total_frames * zoom_in_ratio * zoom_speed))
         elif frame < total_frames * (zoom_in_ratio + zoom_out_ratio):
             # Zoom out phase
-            zoom_level = 2 - ((frame - total_frames * zoom_in_ratio) / (total_frames * zoom_out_ratio))
+            zoom_level = 3 - 2 * ((frame - total_frames * zoom_in_ratio) / (total_frames * zoom_out_ratio * zoom_speed))
         else:
             # Reset the frame counter
             frame = 0
@@ -35,31 +35,34 @@ def zoom_generator(zoom_in_ratio, zoom_out_ratio, total_frames):
 
         frame += 1
         yield zoom_level
-zoom_gen = zoom_generator(zoom_in_ratio=0.5, zoom_out_ratio=0.5, total_frames=100)
-
+zoom_gen = zoom_generator(zoom_in_ratio=1, zoom_out_ratio=1, total_frames=100, zoom_speed=20)
 def zoom(frame, roiBox, zoom_level):
     x, y, w, h = [int(v) for v in roiBox]
 
-    # Calculate the size of the zoomed ROI
-    w_zoom = int(w * zoom_level)
-    h_zoom = int(h * zoom_level)
+    # Calculate the center of the original ROI
+    center_x, center_y = x + w // 2, y + h // 2
 
-    # Calculate the top-left corner of the zoomed ROI
-    x_zoom = max(0, x - (w_zoom - w) // 2)
-    y_zoom = max(0, y - (h_zoom - h) // 2)
+    # Calculate the size of the cropped region
+    new_width = int(frame.shape[1] / zoom_level)
+    new_height = int(frame.shape[0] / zoom_level)
 
-    # Make sure the zoomed ROI is within the frame
-    if x_zoom + w_zoom > frame.shape[1]:
-        w_zoom = frame.shape[1] - x_zoom
-    if y_zoom + h_zoom > frame.shape[0]:
-        h_zoom = frame.shape[0] - y_zoom
+    # Calculate the top-left corner of the cropped region
+    x_start = max(0, center_x - new_width // 2)
+    y_start = max(0, center_y - new_height // 2)
 
-    # Crop and resize the frame
-    cropped = frame[y_zoom:y_zoom+h_zoom, x_zoom:x_zoom+w_zoom]
+    # Make sure the cropped region is within the frame
+    if x_start + new_width > frame.shape[1]:
+        x_start = frame.shape[1] - new_width
+    if y_start + new_height > frame.shape[0]:
+        y_start = frame.shape[0] - new_height
+
+    # Crop the frame
+    cropped = frame[y_start:y_start+new_height, x_start:x_start+new_width]
+
+    # Resize the cropped frame to the original frame's size
     zoomed = cv2.resize(cropped, (frame.shape[1], frame.shape[0]))
 
     return zoomed
-
 # Create a tracker
 tracker = cv2.TrackerCSRT_create()
 
@@ -91,6 +94,7 @@ while True:
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
             # Zoom in or out on the ROI
                 zoom_level = next(zoom_gen)
+                print(zoom_level)
                 frame = zoom(frame, roiBox, zoom_level)
 
             else:
