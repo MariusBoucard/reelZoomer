@@ -3,6 +3,8 @@ import numpy as np
 
 # Initialize variables
 roiPts = []
+roiKeyDict = {}
+frame_count = 0
 inputMode = False
 roiBox = None
 pause = False
@@ -68,7 +70,36 @@ tracker = cv2.TrackerCSRT_create()
 
 # Open the video
 cap = cv2.VideoCapture('assets/stems.mp4')
+def render_video(roiKeyDict, video_path, output_path):
+    print("Rendering video...")
+    cap = cv2.VideoCapture(video_path)
+    # Define the codec and create a VideoWriter object
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # or use 'XVID'
+    out = cv2.VideoWriter(output_path, fourcc, 20.0, (600, 900))
 
+    roiBox = None
+    current_frame = 0
+    while True:
+        ret, frame = cap.read()
+        current_frame += 1
+        if not ret:
+            break
+        # Resize the frame
+        frame = cv2.resize(frame, (600, 900))  # You can adjust the size as needed
+
+        # If the ROI has been computed
+        if roiKeyDict.get(current_frame) is not None:
+            roiBox = roiKeyDict[current_frame]
+
+        if roiBox:    # Zoom in or out on the ROI
+            zoom_level = next(zoom_gen)
+            frame = zoom(frame, roiBox, zoom_level)
+
+        # Write the frame to the output file
+        out.write(frame)
+
+    cap.release()
+    out.release()
 # Set the mouse callback function
 cv2.namedWindow("Frame")
 cv2.setMouseCallback("Frame", select_roi)
@@ -77,6 +108,7 @@ while True:
     if not pause:
         # Read a new frame
         ret, frame = cap.read()
+        current_frame += 1
         if not ret:
             break
 
@@ -105,11 +137,25 @@ while True:
 
     key = cv2.waitKey(20) & 0xFF
 
+    if roiKeyDict.get(current_frame) is not None:
+        roiBox = roiKeyDict[current_frame]
+        tracker.init(frame, roiBox)
+    if key == ord("d"):
+        print(roiKeyDict)
+        max_key = max(k for k in roiKeyDict if k < current_frame)
+        print("The largest key less than current_frame is:", max_key)
+        
+        # Delete the entry with the largest key less than current_frame
+        del roiKeyDict[max_key]
     # If 'i' is pressed, enter input mode to select the ROI
+    if key == ord(" ") :
+        cap = cv2.VideoCapture('assets/stems.mp4')
+        
     if key == ord("i") and len(roiPts) == 4:
         roiPts = []
         inputMode = False
         pause = False
+
     if key == ord("i") and len(roiPts) < 4:
         inputMode = True
         ret, frame = cap.read()
@@ -133,9 +179,16 @@ while True:
         # tracker
         roi = orig[tl[1]:br[1], tl[0]:br[0]]
         roiBox = (tl[0], tl[1], br[0] - tl[0], br[1] - tl[1])
+        roiKeyDict[current_frame] = roiBox
         tracker.init(frame, roiBox)
         pause = False
 
+    if key == ord("p"):
+        pause = not pause
+        if key == ord("q"):
+            break
+    if key == ord('f'):
+        render_video(roiKeyDict, 'assets/stems.mp4', 'output.mp4')
     # If 'q' is pressed, stop the loop
     elif key == ord("q"):
         break
