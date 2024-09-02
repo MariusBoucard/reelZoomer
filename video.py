@@ -90,14 +90,20 @@ def render_video(roiKeyDict, video_path, output_path):
         # If the ROI has been computed
         if roiKeyDict.get(current_frame) is not None:
             roiBox = roiKeyDict[current_frame]
+            tracker.init(frame, roiBox)
+            success, roiBox = tracker.update(frame)
+
+
 
         if roiBox:    # Zoom in or out on the ROI
-            zoom_level = next(zoom_gen)
-            frame = zoom(frame, roiBox, zoom_level)
+            success, roiBox = tracker.update(frame)
+            if success:
+                zoom_level = next(zoom_gen)
+                frame = zoom(frame, roiBox, zoom_level)
 
         # Write the frame to the output file
         out.write(frame)
-
+        print("Frame:", current_frame)
     cap.release()
     out.release()
 # Set the mouse callback function
@@ -110,7 +116,14 @@ while True:
         ret, frame = cap.read()
         current_frame += 1
         if not ret:
-            break
+             # If the video has ended, reset the counter and pause the video
+            cap = cv2.VideoCapture('assets/stems.mp4')
+            ret, frame = cap.read()
+            frame = cv2.resize(frame, (600, 900))  # You can adjust the size as needed
+
+            current_frame = 1
+            pause = True
+            continue
 
         # Resize the frame
         frame = cv2.resize(frame, (600, 900))  # You can adjust the size as needed
