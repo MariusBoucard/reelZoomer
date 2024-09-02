@@ -19,12 +19,26 @@ def select_roi(event, x, y, flags, param):
         cv2.circle(param, (x, y), 4, (0, 255, 0), 2)
         cv2.imshow("Frame", param)
 
+def zoom_generator(zoom_in_ratio, zoom_out_ratio, total_frames):
+    frame = 0
+    while True:
+        if frame < total_frames * zoom_in_ratio:
+            # Zoom in phase
+            zoom_level = 1 + (frame / (total_frames * zoom_in_ratio))
+        elif frame < total_frames * (zoom_in_ratio + zoom_out_ratio):
+            # Zoom out phase
+            zoom_level = 2 - ((frame - total_frames * zoom_in_ratio) / (total_frames * zoom_out_ratio))
+        else:
+            # Reset the frame counter
+            frame = 0
+            zoom_level = 1
 
-def zoom(frame, roiBox, zoom_factor, frame_count, current_frame):
+        frame += 1
+        yield zoom_level
+zoom_gen = zoom_generator(zoom_in_ratio=0.5, zoom_out_ratio=0.5, total_frames=100)
+
+def zoom(frame, roiBox, zoom_level):
     x, y, w, h = [int(v) for v in roiBox]
-
-    # Calculate the amount of zoom for this frame
-    zoom_level = 1 + (zoom_factor - 1) * (current_frame / frame_count)
 
     # Calculate the size of the zoomed ROI
     w_zoom = int(w * zoom_level)
@@ -75,10 +89,9 @@ while True:
             if success:
                 x, y, w, h = [int(v) for v in roiBox]
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            # Zoom in on the ROI
-            if current_frame < frame_count:
-                frame = zoom(frame, roiBox, zoom_factor, frame_count, current_frame)
-                current_frame += 1
+            # Zoom in or out on the ROI
+                zoom_level = next(zoom_gen)
+                frame = zoom(frame, roiBox, zoom_level)
 
             else:
                 cv2.putText(frame, "Tracking failed", (100,80), cv2.FONT_HERSHEY_SIMPLEX, 0.75,(0,0,255),2)
@@ -95,6 +108,11 @@ while True:
         pause = False
     if key == ord("i") and len(roiPts) < 4:
         inputMode = True
+        ret, frame = cap.read()
+        frame = cv2.resize(frame, (600, 900))  # You can adjust the size as needed
+
+        cv2.imshow("Frame", frame)
+
         orig = frame.copy()
         pause = True
 
