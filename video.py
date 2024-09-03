@@ -11,7 +11,9 @@ pause = False
 zoom_factor = 1.2
 frame_count = 1000
 current_frame = 0
-
+oldROIBox = None    
+def lerp(a, b, t):
+    return a * (1 - t) + b * t
 # Mouse callback function
 def select_roi(event, x, y, flags, param):
     global roiPts, inputMode, roiBox, pause
@@ -114,6 +116,9 @@ def render_video(roiKeyDict, video_path, output_path):
 cv2.namedWindow("Frame")
 cv2.setMouseCallback("Frame", select_roi)
 
+lerp_step =0 
+lerp_frames = 50
+
 while True:
     if not pause:
         # Read a new frame
@@ -136,22 +141,23 @@ while True:
             roiBox = roiKeyDict[current_frame]
             tracker.init(frame, roiBox)
             success, roiBox = tracker.update(frame)
+            lerp_step=0
                 
-            if success:
-                x, y, w, h = [int(v) for v in roiBox]
-                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-        # Zoom in or out on the ROI
-            zoom_level = next(zoom_gen)
-            print(zoom_level)
-            frame = zoom(frame, roiBox, zoom_level)
-        # If the ROI has been computed
+
         if roiBox is not None:
             # Update the tracker
             success, roiBox = tracker.update(frame)
-
             # Draw the bounding box
             if success:
                 x, y, w, h = [int(v) for v in roiBox]
+                if lerp_step < lerp_frames and oldROIBox is not None:
+                    x = int(lerp(oldROIBox[0], x, lerp_step / lerp_frames))
+                    y = int(lerp(oldROIBox[1], y, lerp_step / lerp_frames))
+                    w = int(lerp(oldROIBox[2], w, lerp_step / lerp_frames))
+                    h = int(lerp(oldROIBox[3], h, lerp_step / lerp_frames))
+                    roiBox = (x, y, w, h)
+                    lerp_step += 1
+            
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
             # Zoom in or out on the ROI
                 zoom_level = next(zoom_gen)
