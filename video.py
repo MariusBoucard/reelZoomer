@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import json
 
 # Initialize variables
 roiPts = []
@@ -11,7 +12,8 @@ pause = False
 zoom_factor = 1.2
 frame_count = 1000
 current_frame = 0
-oldROIBox = None    
+oldROIBox = None 
+
 def lerp(a, b, t):
     return a * (1 - t) + b * t
 # Mouse callback function
@@ -23,19 +25,22 @@ def select_roi(event, x, y, flags, param):
         cv2.circle(param, (x, y), 4, (0, 255, 0), 2)
         cv2.imshow("Frame", param)
 
-def zoom_generator(zoom_in_ratio, zoom_out_ratio, total_frames, zoom_speed):
+def zoom_generator(zoom_in_ratio, zoom_out_ratio, total_frames, zoom_speed, brutal_variation_speed=1):
     frame = 0
     while True:
         if frame < total_frames * zoom_in_ratio:
             # Zoom in phase
-            zoom_level = 1 + 2 * (frame / (total_frames * zoom_in_ratio * zoom_speed))
+            zoom_level = 1 + 1.5 * (frame / (total_frames * zoom_in_ratio * zoom_speed))
         elif frame < total_frames * (zoom_in_ratio + zoom_out_ratio):
             # Zoom out phase
-            zoom_level = 3 - 2 * ((frame - total_frames * zoom_in_ratio) / (total_frames * zoom_out_ratio * zoom_speed))
+            zoom_level = 2.5 - 1.5 * ((frame - total_frames * zoom_in_ratio) / (total_frames * zoom_out_ratio * zoom_speed))
         else:
             # Reset the frame counter
             frame = 0
             zoom_level = 1
+
+        # Apply brutal variation if needed
+        zoom_level *= brutal_variation_speed
 
         frame += 1
         yield zoom_level
@@ -117,7 +122,7 @@ cv2.namedWindow("Frame")
 cv2.setMouseCallback("Frame", select_roi)
 
 lerp_step =0 
-lerp_frames = 50
+lerp_frames = 20
 
 while True:
     if not pause:
@@ -138,6 +143,7 @@ while True:
         frame = cv2.resize(frame, (600, 900))  # You can adjust the size as needed
         if(roiKeyDict.get(current_frame) is not None):
             oldROIBox = roiBox
+            print("updated ROI" + str(current_frame))
             roiBox = roiKeyDict[current_frame]
             tracker.init(frame, roiBox)
             success, roiBox = tracker.update(frame)
@@ -172,9 +178,6 @@ while True:
 
     key = cv2.waitKey(20) & 0xFF
 
-    if roiKeyDict.get(current_frame) is not None:
-        roiBox = roiKeyDict[current_frame]
-        tracker.init(frame, roiBox)
     if key == ord("d"):
         print(roiKeyDict)
         max_key = max(k for k in roiKeyDict if k < current_frame)
@@ -191,7 +194,17 @@ while True:
         roiPts = []
         inputMode = False
         pause = False
+    if key == ord("s"):
+        roiDict_int = {int(k): (int(v[0]), int(v[1]), int(v[2]), int(v[3])) for k, v in roiKeyDict.items()}
+        with open('roiDict.json', 'w') as file:
+            json.dump(roiDict_int, file)
 
+    if key == ord("l"):
+        with open('roiDict.json', 'r') as file:
+            roiKeyDict = json.load(file)
+            roiKeyDict = {int(k): v for k, v in roiKeyDict.items()}
+
+            print(roiKeyDict)
     if key == ord("i") and len(roiPts) < 4:
         inputMode = True
         ret, frame = cap.read()
