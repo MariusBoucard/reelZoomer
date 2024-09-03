@@ -3,6 +3,9 @@ import numpy as np
 import json
 
 # Initialize variables
+
+lerp_step =0 
+lerp_frames = 20
 roiPts = []
 roiKeyDict = {}
 frame_count = 0
@@ -89,6 +92,9 @@ def render_video(roiKeyDict, video_path, output_path):
     out = cv2.VideoWriter(output_path, fourcc, 20.0, (600, 900))
 
     roiBox = None
+    oldROIBox = None
+    lerp_step = 0
+    lerp_frames = 20
     current_frame = 0
     while True:
         ret, frame = cap.read()
@@ -100,15 +106,24 @@ def render_video(roiKeyDict, video_path, output_path):
 
         # If the ROI has been computed
         if roiKeyDict.get(current_frame) is not None:
+            oldROIBox = roiBox
             roiBox = roiKeyDict[current_frame]
             tracker.init(frame, roiBox)
             success, roiBox = tracker.update(frame)
-
-
+            lerp_step = 0
 
         if roiBox:    # Zoom in or out on the ROI
             success, roiBox = tracker.update(frame)
             if success:
+                x, y, w, h = [int(v) for v in roiBox]
+                if lerp_step < lerp_frames and oldROIBox is not None:
+                    x = int(lerp(oldROIBox[0], x, lerp_step / lerp_frames))
+                    y = int(lerp(oldROIBox[1], y, lerp_step / lerp_frames))
+                    w = int(lerp(oldROIBox[2], w, lerp_step / lerp_frames))
+                    h = int(lerp(oldROIBox[3], h, lerp_step / lerp_frames))
+                    roiBox = (x, y, w, h)
+                    lerp_step += 1
+
                 zoom_level = next(zoom_gen)
                 frame = zoom(frame, roiBox, zoom_level)
 
@@ -120,9 +135,6 @@ def render_video(roiKeyDict, video_path, output_path):
 # Set the mouse callback function
 cv2.namedWindow("Frame")
 cv2.setMouseCallback("Frame", select_roi)
-
-lerp_step =0 
-lerp_frames = 20
 
 while True:
     if not pause:
