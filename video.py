@@ -37,7 +37,9 @@ def zoom_generator(zoom_in_ratio, zoom_out_ratio, total_frames, zoom_speed):
 
         frame += 1
         yield zoom_level
+
 zoom_gen = zoom_generator(zoom_in_ratio=1, zoom_out_ratio=1, total_frames=100, zoom_speed=20)
+
 def zoom(frame, roiBox, zoom_level):
     x, y, w, h = [int(v) for v in roiBox]
 
@@ -65,6 +67,8 @@ def zoom(frame, roiBox, zoom_level):
     zoomed = cv2.resize(cropped, (frame.shape[1], frame.shape[0]))
 
     return zoomed
+
+
 # Create a tracker
 tracker = cv2.TrackerCSRT_create()
 
@@ -127,7 +131,19 @@ while True:
 
         # Resize the frame
         frame = cv2.resize(frame, (600, 900))  # You can adjust the size as needed
-
+        if(roiKeyDict.get(current_frame) is not None):
+            oldROIBox = roiBox
+            roiBox = roiKeyDict[current_frame]
+            tracker.init(frame, roiBox)
+            success, roiBox = tracker.update(frame)
+                
+            if success:
+                x, y, w, h = [int(v) for v in roiBox]
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        # Zoom in or out on the ROI
+            zoom_level = next(zoom_gen)
+            print(zoom_level)
+            frame = zoom(frame, roiBox, zoom_level)
         # If the ROI has been computed
         if roiBox is not None:
             # Update the tracker
@@ -162,6 +178,7 @@ while True:
         del roiKeyDict[max_key]
     # If 'i' is pressed, enter input mode to select the ROI
     if key == ord(" ") :
+        current_frame = 0
         cap = cv2.VideoCapture('assets/stems.mp4')
         
     if key == ord("i") and len(roiPts) == 4:
