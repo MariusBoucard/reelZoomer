@@ -98,6 +98,7 @@ tracker = cv2.TrackerCSRT_create()
 # Open the video
 cap = cv2.VideoCapture('assets/stems.mp4')
 def render_video(roiKeyDict, video_path, output_path):
+    global roiBox, lerp_step, lerp_frames, current_frame, oldROIBox, current_zoom, oldZoomValue, current_pas_zoom
     print("Rendering video...")
     cap = cv2.VideoCapture(video_path)
     # Define the codec and create a VideoWriter object
@@ -116,6 +117,11 @@ def render_video(roiKeyDict, video_path, output_path):
             break
         # Resize the frame
         frame = cv2.resize(frame, (600, 900))  # You can adjust the size as needed
+        if zoomDict.get(current_frame) is not None:
+            oldZoomValue = current_zoom[1]
+            current_zoom = zoomDict[current_frame]
+            zoom_index = 0 
+            current_pas_zoom = (current_zoom[1] - oldZoomValue) / current_zoom[2]
 
         # If the ROI has been computed
         if roiKeyDict.get(current_frame) is not None:
@@ -137,7 +143,7 @@ def render_video(roiKeyDict, video_path, output_path):
                     roiBox = (x, y, w, h)
                     lerp_step += 1
 
-                zoom_level = next(zoom_gen)
+                zoom_level = get_zoom() #next(zoom_gen)
                 frame = zoom(frame, roiBox, zoom_level)
 
         # Write the frame to the output file
@@ -232,6 +238,7 @@ while True:
             json.dump(roiDict_int, file)
         with open('zoomDict.json', 'w') as file:
             json.dump(zoomDict, file)
+        print("Data saved to roiDict.json")
 
     if key == ord("z"):
         print("Zoom in or out? Enter 't' for zoom in, 'f' for zoom out:")
@@ -258,7 +265,7 @@ while True:
             zoomDict = json.load(file)
             zoomDict = {int(k): v for k, v in zoomDict.items()}
             print(roiKeyDict)
-            
+
     if key == ord("i") and len(roiPts) < 4:
         inputMode = True
         ret, frame = cap.read()
