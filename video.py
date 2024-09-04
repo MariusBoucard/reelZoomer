@@ -17,6 +17,12 @@ frame_count = 1000
 current_frame = 0
 oldROIBox = None 
 
+zoomDict = {}
+current_zoom = (False, 1, 0)   # (zoom_in, zoom_level, zoom_timing)
+zoom_index = 0
+oldZoomValue = 1
+current_pas_zoom = 0
+
 def lerp(a, b, t):
     return a * (1 - t) + b * t
 # Mouse callback function
@@ -76,9 +82,16 @@ def zoom(frame, roiBox, zoom_level):
     # Resize the cropped frame to the original frame's size
     zoomed = cv2.resize(cropped, (frame.shape[1], frame.shape[0]))
 
+
     return zoomed
-
-
+def get_zoom():
+    global zoom_index, oldZoomValue, current_pas_zoom
+    if zoom_index < current_zoom[2]:
+        zoom_index += 1
+        return oldZoomValue + current_pas_zoom * zoom_index
+    else:
+        return current_zoom[1]
+    
 # Create a tracker
 tracker = cv2.TrackerCSRT_create()
 
@@ -161,6 +174,12 @@ while True:
             success, roiBox = tracker.update(frame)
             lerp_step=0
                 
+        if zoomDict.get(current_frame) is not None:
+            oldZoomValue = current_zoom[1]
+            current_zoom = zoomDict[current_frame]
+            zoom_index = 0 
+            current_pas_zoom = (current_zoom[1] - oldZoomValue) / current_zoom[2]
+
 
         if roiBox is not None:
             # Update the tracker
@@ -178,7 +197,7 @@ while True:
             
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
             # Zoom in or out on the ROI
-                zoom_level = next(zoom_gen)
+                zoom_level = get_zoom()#next(zoom_gen)
                 print(zoom_level)
                 frame = zoom(frame, roiBox, zoom_level)
 
@@ -206,17 +225,40 @@ while True:
         roiPts = []
         inputMode = False
         pause = False
+
     if key == ord("s"):
         roiDict_int = {int(k): (int(v[0]), int(v[1]), int(v[2]), int(v[3])) for k, v in roiKeyDict.items()}
         with open('roiDict.json', 'w') as file:
             json.dump(roiDict_int, file)
+        with open('zoomDict.json', 'w') as file:
+            json.dump(zoomDict, file)
+
+    if key == ord("z"):
+        print("Zoom in or out? Enter 't' for zoom in, 'f' for zoom out:")
+        zoom_in = input().lower() == 't'
+        print("Enter the final zoom level (1-3):")
+        zoom_level = float(input())
+        zoom_level = max(1, min(3, zoom_level))  # Ensure zoom level is between 1 and 3
+        print("Enter the timing of the zoom effect (0-300):")
+        zoom_timing = int(input())
+        zoom_timing = max(0, min(300, zoom_timing))
+        zoomDict[current_frame] = (zoom_in, zoom_level, zoom_timing)
+        oldZoomValue = current_zoom[1]
+        current_zoom = zoomDict[current_frame]
+        zoom_index = 0 
+        current_pas_zoom = (current_zoom[1] - oldZoomValue) / current_zoom[2]
+        zoomDict[current_frame] = (zoom_in, zoom_level, zoom_timing)
+        current_zoom = zoomDict[current_frame]
 
     if key == ord("l"):
         with open('roiDict.json', 'r') as file:
             roiKeyDict = json.load(file)
             roiKeyDict = {int(k): v for k, v in roiKeyDict.items()}
-
+        with open('zoomDict.json', 'r') as file:
+            zoomDict = json.load(file)
+            zoomDict = {int(k): v for k, v in zoomDict.items()}
             print(roiKeyDict)
+            
     if key == ord("i") and len(roiPts) < 4:
         inputMode = True
         ret, frame = cap.read()
@@ -253,6 +295,11 @@ while True:
     # If 'q' is pressed, stop the loop
     elif key == ord("q"):
         break
+
+# We can include some quick zoom that will create a modification on the current zoom : values entered by user will be : 
+# z : create a zoom data structure, wait for j or k to zoom in or out, then set the final zoom value, and then check the timing  (user enter the transition time in s ).
+# all theses values should be saved in a dict with the frame number as key.
+# the zoom value for the current frame will be calculated by the zoom function, and the zoom function will be called at each frame. it will use the zoomDict to calculate the zoom value.
 
 # When everything done, release the capture
 cap.release()
