@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 import json
+import pygame
+from moviepy.editor import VideoFileClip, AudioFileClip
 
 # Initialize variables
 
@@ -16,12 +18,17 @@ zoom_factor = 1.2
 frame_count = 1000
 current_frame = 0
 oldROIBox = None 
+pygame.mixer.init()
 
 zoomDict = {}
 current_zoom = (False, 1, 0)   # (zoom_in, zoom_level, zoom_timing)
 zoom_index = 0
 oldZoomValue = 1
 current_pas_zoom = 0
+soundFilePath = 'vids/output.wav'
+inputFilePath = 'vids/guitarMountainFuckTrim.mp4'
+pygame.mixer.music.load(soundFilePath)
+pygame.mixer.music.play(-1)
 
 def lerp(a, b, t):
     return a * (1 - t) + b * t
@@ -96,14 +103,22 @@ def get_zoom():
 tracker = cv2.TrackerCSRT_create()
 
 # Open the video
-cap = cv2.VideoCapture('assets/stems.mp4')
+cap = cv2.VideoCapture(inputFilePath)
+frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+print(f"Frame size: {frame_width} x {frame_height}")
+print(inputFilePath)
+fps = cap.get(cv2.CAP_PROP_FPS)
+
+print(f"Frame rate: {fps}")
 def render_video(roiKeyDict, video_path, output_path):
-    global roiBox, lerp_step, lerp_frames, current_frame, oldROIBox, current_zoom, oldZoomValue, current_pas_zoom
+    global roiBox, lerp_step, lerp_frames, current_frame, oldROIBox, current_zoom, oldZoomValue, current_pas_zoom, zoom_index
     print("Rendering video...")
     cap = cv2.VideoCapture(video_path)
     # Define the codec and create a VideoWriter object
+    current_frame = 0
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # or use 'XVID'
-    out = cv2.VideoWriter(output_path, fourcc, 20.0, (600, 900))
+    out = cv2.VideoWriter(output_path, fourcc, 30.0, (506, 900))
 
     roiBox = None
     oldROIBox = None
@@ -116,7 +131,7 @@ def render_video(roiKeyDict, video_path, output_path):
         if not ret:
             break
         # Resize the frame
-        frame = cv2.resize(frame, (600, 900))  # You can adjust the size as needed
+        frame = cv2.resize(frame, (506, 900))  # You can adjust the size as needed
         if zoomDict.get(current_frame) is not None:
             oldZoomValue = current_zoom[1]
             current_zoom = zoomDict[current_frame]
@@ -148,10 +163,22 @@ def render_video(roiKeyDict, video_path, output_path):
 
         # Write the frame to the output file
         out.write(frame)
+
         print("Frame:", current_frame)
     cap.release()
     out.release()
-# Set the mouse callback function
+    print("Video rendered successfully")
+    # Load your video
+    video = VideoFileClip(output_path)
+
+    # Load your audio
+    audio = AudioFileClip(soundFilePath)
+
+    # Add the audio to the video
+    final_video = video.set_audio(audio)
+
+    # Write the result to a file
+    final_video.write_videofile('final_output.mp4', codec='libx264')# Set the mouse callback function
 cv2.namedWindow("Frame")
 cv2.setMouseCallback("Frame", select_roi)
 
@@ -162,16 +189,18 @@ while True:
         current_frame += 1
         if not ret:
              # If the video has ended, reset the counter and pause the video
-            cap = cv2.VideoCapture('assets/stems.mp4')
+            cap = cv2.VideoCapture(inputFilePath)
             ret, frame = cap.read()
-            frame = cv2.resize(frame, (600, 900))  # You can adjust the size as needed
+            frame = cv2.resize(frame, (506, 900))  # You can adjust the size as needed
 
             current_frame = 1
             pause = True
+            pygame.mixer.music.pause()
+
             continue
 
         # Resize the frame
-        frame = cv2.resize(frame, (600, 900))  # You can adjust the size as needed
+        frame = cv2.resize(frame, (506, 900))  # You can adjust the size as needed
         if(roiKeyDict.get(current_frame) is not None):
             oldROIBox = roiBox
             print("updated ROI" + str(current_frame))
@@ -204,7 +233,6 @@ while True:
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
             # Zoom in or out on the ROI
                 zoom_level = get_zoom()#next(zoom_gen)
-                print(zoom_level)
                 frame = zoom(frame, roiBox, zoom_level)
 
             else:
@@ -212,25 +240,32 @@ while True:
 
     # Show the frame
     cv2.imshow("Frame", frame)
-
-    key = cv2.waitKey(20) & 0xFF
-
+    if roiBox is None:
+        key = cv2.waitKey(25) & 0xFF
+    else:
+        key = cv2.waitKey(8) & 0xFF
     if key == ord("d"):
         print(roiKeyDict)
         max_key = max(k for k in roiKeyDict if k < current_frame)
-        print("The largest key less than current_frame is:", max_key)
-        
+        print("last key deleted")        
         # Delete the entry with the largest key less than current_frame
         del roiKeyDict[max_key]
     # If 'i' is pressed, enter input mode to select the ROI
     if key == ord(" ") :
+        print("back to zero")
+        roiBox = None
+        pygame.mixer.music.load(soundFilePath)
+        pygame.mixer.music.play(-1)
         current_frame = 0
-        cap = cv2.VideoCapture('assets/stems.mp4')
-        
+        cap = cv2.VideoCapture(inputFilePath)
+        pause = False 
+        print(inputFilePath)
     if key == ord("i") and len(roiPts) == 4:
         roiPts = []
         inputMode = False
         pause = False
+        pygame.mixer.music.unpause()
+
 
     if key == ord("s"):
         roiDict_int = {int(k): (int(v[0]), int(v[1]), int(v[2]), int(v[3])) for k, v in roiKeyDict.items()}
@@ -241,6 +276,7 @@ while True:
         print("Data saved to roiDict.json")
 
     if key == ord("z"):
+        pygame.mixer.music.pause()
         print("Zoom in or out? Enter 't' for zoom in, 'f' for zoom out:")
         zoom_in = input().lower() == 't'
         print("Enter the final zoom level (1-3):")
@@ -256,6 +292,7 @@ while True:
         current_pas_zoom = (current_zoom[1] - oldZoomValue) / current_zoom[2]
         zoomDict[current_frame] = (zoom_in, zoom_level, zoom_timing)
         current_zoom = zoomDict[current_frame]
+        pygame.mixer.music.unpause()
 
     if key == ord("l"):
         with open('roiDict.json', 'r') as file:
@@ -267,9 +304,10 @@ while True:
             print(roiKeyDict)
 
     if key == ord("i") and len(roiPts) < 4:
+        pygame.mixer.music.pause()
         inputMode = True
         ret, frame = cap.read()
-        frame = cv2.resize(frame, (600, 900))  # You can adjust the size as needed
+        frame = cv2.resize(frame, (506, 900))  # You can adjust the size as needed
 
         cv2.imshow("Frame", frame)
 
@@ -292,22 +330,24 @@ while True:
         roiKeyDict[current_frame] = roiBox
         tracker.init(frame, roiBox)
         pause = False
+        pygame.mixer.music.unpause()
 
     if key == ord("p"):
         pause = not pause
+        if pause:
+            pygame.mixer.music.pause()
+        else:
+            pygame.mixer.music.unpause()
         if key == ord("q"):
             break
     if key == ord('f'):
-        render_video(roiKeyDict, 'assets/stems.mp4', 'output.mp4')
+        pygame.mixer.music.pause()
+        render_video(roiKeyDict, inputFilePath, 'output.mp4')
     # If 'q' is pressed, stop the loop
     elif key == ord("q"):
         break
 
-# We can include some quick zoom that will create a modification on the current zoom : values entered by user will be : 
-# z : create a zoom data structure, wait for j or k to zoom in or out, then set the final zoom value, and then check the timing  (user enter the transition time in s ).
-# all theses values should be saved in a dict with the frame number as key.
-# the zoom value for the current frame will be calculated by the zoom function, and the zoom function will be called at each frame. it will use the zoomDict to calculate the zoom value.
-
-# When everything done, release the capture
+# ADD AUTO ADJUSTING FRAME SIZE
+pygame.mixer.music.stop()
 cap.release()
 cv2.destroyAllWindows()
