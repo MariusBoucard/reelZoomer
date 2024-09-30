@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 import json
+import tkinter as tk
+from tkinter import simpledialog
 
 # Initialize variables
 
@@ -16,7 +18,16 @@ zoom_factor = 1.2
 frame_count = 1000
 current_frame = 0
 oldROIBox = None 
+video_path = None
+# Function to show a popup window and get the file name from the user
+def get_video_path():
+    root = tk.Tk()
+    root.withdraw()  # Hide the root window
+    video_path = simpledialog.askstring("Input", "Please enter the video file name:")
+    root.destroy()
+    return video_path
 
+# Get the video path from the user
 def lerp(a, b, t):
     return a * (1 - t) + b * t
 # Mouse callback function
@@ -82,8 +93,10 @@ def zoom(frame, roiBox, zoom_level):
 # Create a tracker
 tracker = cv2.TrackerCSRT_create()
 
+# Get the video path from the user
+video_path = get_video_path()
 # Open the video
-cap = cv2.VideoCapture('assets/stems.mp4')
+cap = cv2.VideoCapture('assets/'+video_path)
 def render_video(roiKeyDict, video_path, output_path):
     print("Rendering video...")
     cap = cv2.VideoCapture(video_path)
@@ -143,7 +156,7 @@ while True:
         current_frame += 1
         if not ret:
              # If the video has ended, reset the counter and pause the video
-            cap = cv2.VideoCapture('assets/stems.mp4')
+            cap = cv2.VideoCapture('assets/'+video_path)
             ret, frame = cap.read()
             frame = cv2.resize(frame, (600, 900))  # You can adjust the size as needed
 
@@ -200,7 +213,7 @@ while True:
     # If 'i' is pressed, enter input mode to select the ROI
     if key == ord(" ") :
         current_frame = 0
-        cap = cv2.VideoCapture('assets/stems.mp4')
+        cap = cv2.VideoCapture('assets/'+video_path)
         
     if key == ord("i") and len(roiPts) == 4:
         roiPts = []
@@ -249,7 +262,7 @@ while True:
         if key == ord("q"):
             break
     if key == ord('f'):
-        render_video(roiKeyDict, 'assets/stems.mp4', 'output.mp4')
+        render_video(roiKeyDict, 'assets'+video_path, 'output.mp4')
     # If 'q' is pressed, stop the loop
     elif key == ord("q"):
         break
