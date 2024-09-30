@@ -355,7 +355,7 @@ while True:
             break
     if key == ord('f'):
         pygame.mixer.music.pause()
-        render_video(roiKeyDict, video_path, 'output.mp4')
+        render_video(roiKeyDict, "assets/"+video_path, 'output.mp4')
     # If 'q' is pressed, stop the loop
     elif key == ord("q"):
         break
