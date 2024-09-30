@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 import json
+import tkinter as tk
+from tkinter import simpledialog
 import pygame
 from moviepy.editor import VideoFileClip, AudioFileClip
 
@@ -18,7 +20,16 @@ zoom_factor = 1.2
 frame_count = 1000
 current_frame = 0
 oldROIBox = None 
-pygame.mixer.init()
+video_path = None
+# Function to show a popup window and get the file name from the user
+def get_video_path():
+    root = tk.Tk()
+    root.withdraw()  # Hide the root window
+    video_path = simpledialog.askstring("Input", "Please enter the video file name:")
+    root.destroy()
+    return video_path
+
+# Get the video path from the userpygame.mixer.init()
 
 zoomDict = {}
 current_zoom = (False, 1, 0)   # (zoom_in, zoom_level, zoom_timing)
@@ -102,6 +113,8 @@ def get_zoom():
 # Create a tracker
 tracker = cv2.TrackerCSRT_create()
 
+# Get the video path from the user
+video_path = get_video_path()
 # Open the video
 cap = cv2.VideoCapture(inputFilePath)
 frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -189,7 +202,7 @@ while True:
         current_frame += 1
         if not ret:
              # If the video has ended, reset the counter and pause the video
-            cap = cv2.VideoCapture(inputFilePath)
+            cap = cv2.VideoCapture('assets/'+video_path)
             ret, frame = cap.read()
             frame = cv2.resize(frame, (506, 900))  # You can adjust the size as needed
 
@@ -257,9 +270,9 @@ while True:
         pygame.mixer.music.load(soundFilePath)
         pygame.mixer.music.play(-1)
         current_frame = 0
-        cap = cv2.VideoCapture(inputFilePath)
-        pause = False 
-        print(inputFilePath)
+        pause = False
+        cap = cv2.VideoCapture('assets/'+video_path)
+        
     if key == ord("i") and len(roiPts) == 4:
         roiPts = []
         inputMode = False
@@ -342,7 +355,7 @@ while True:
             break
     if key == ord('f'):
         pygame.mixer.music.pause()
-        render_video(roiKeyDict, inputFilePath, 'output.mp4')
+        render_video(roiKeyDict, video_path, 'output.mp4')
     # If 'q' is pressed, stop the loop
     elif key == ord("q"):
         break
