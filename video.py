@@ -21,12 +21,17 @@ frame_count = 1000
 current_frame = 0
 oldROIBox = None 
 video_path = None
+window_size = (506, 900)
+soundFilePath = "extracted_audio.wav"
 # Function to show a popup window and get the file name from the user
 def get_video_path():
     root = tk.Tk()
     root.withdraw()  # Hide the root window
     video_path = simpledialog.askstring("Input", "Please enter the video file name:")
     root.destroy()
+    video_clip = VideoFileClip("assets/"+video_path)
+    audio_path = "extracted_audio.wav"
+    video_clip.audio.write_audiofile(audio_path)
     return video_path
 
 # Get the video path from the userpygame.mixer.init()
@@ -36,10 +41,10 @@ current_zoom = (False, 1, 0)   # (zoom_in, zoom_level, zoom_timing)
 zoom_index = 0
 oldZoomValue = 1
 current_pas_zoom = 0
-soundFilePath = 'vids/output.wav'
+#soundFilePath = 'extracted_audio.wav'
 inputFilePath = 'vids/guitarMountainFuckTrim.mp4'
-pygame.mixer.music.load(soundFilePath)
-pygame.mixer.music.play(-1)
+#pygame.mixer.music.load(soundFilePath)
+#pygame.mixer.music.play(-1)
 
 def lerp(a, b, t):
     return a * (1 - t) + b * t
@@ -127,11 +132,15 @@ print(f"Frame rate: {fps}")
 def render_video(roiKeyDict, video_path, output_path):
     global roiBox, lerp_step, lerp_frames, current_frame, oldROIBox, current_zoom, oldZoomValue, current_pas_zoom, zoom_index
     print("Rendering video...")
-    cap = cv2.VideoCapture(video_path)
+    cap = cv2.VideoCapture("assets/"+video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+
     # Define the codec and create a VideoWriter object
     current_frame = 0
+    original_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    original_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # or use 'XVID'
-    out = cv2.VideoWriter(output_path, fourcc, 30.0, (506, 900))
+    out = cv2.VideoWriter(output_path, fourcc, fps, (original_width, original_height))
 
     roiBox = None
     oldROIBox = None
@@ -144,7 +153,11 @@ def render_video(roiKeyDict, video_path, output_path):
         if not ret:
             break
         # Resize the frame
-        frame = cv2.resize(frame, (506, 900))  # You can adjust the size as needed
+        # calculate x and y scale factors
+
+        x_factor = original_width / window_size[0]
+        y_factor =original_height / window_size[1]
+
         if zoomDict.get(current_frame) is not None:
             oldZoomValue = current_zoom[1]
             current_zoom = zoomDict[current_frame]
@@ -155,6 +168,10 @@ def render_video(roiKeyDict, video_path, output_path):
         if roiKeyDict.get(current_frame) is not None:
             oldROIBox = roiBox
             roiBox = roiKeyDict[current_frame]
+            ## Here I should update the roiBox according to scale factor
+            print("updated ROI" + str(current_frame))
+            print(roiBox)
+            roiBox = (int(roiBox[0] * x_factor), int(roiBox[1] * y_factor), int(roiBox[2] * x_factor), int(roiBox[3] * y_factor))
             tracker.init(frame, roiBox)
             success, roiBox = tracker.update(frame)
             lerp_step = 0
@@ -254,7 +271,7 @@ while True:
     # Show the frame
     cv2.imshow("Frame", frame)
     if roiBox is None:
-        key = cv2.waitKey(25) & 0xFF
+        key = cv2.waitKey(16) & 0xFF
     else:
         key = cv2.waitKey(8) & 0xFF
     if key == ord("d"):
@@ -355,7 +372,7 @@ while True:
             break
     if key == ord('f'):
         pygame.mixer.music.pause()
-        render_video(roiKeyDict, "assets/"+video_path, 'output.mp4')
+        render_video(roiKeyDict, video_path, 'output.mp4')
     # If 'q' is pressed, stop the loop
     elif key == ord("q"):
         break
